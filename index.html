@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тренажер трассировки печатных плат</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('pcb-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark')}catch(e){}</script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>Тренажер трассировки печатных плат</h1>
+  <button id="bTheme" class="switch" role="switch" aria-checked="true" aria-label="Тёмная тема">
+    <span class="ic">☀</span><span class="ic">☾</span><i class="knob"></i>
+  </button>
+</header>
+<main>
+  <section class="board">
+    <canvas id="cv"></canvas>
+    <div class="under"><p id="msg" class="msg"></p><span id="badge" class="badge">Верхний слой</span></div>
+  </section>
+  <aside class="info">
+    <ul class="hint">
+      <li>Соедините дорожками парные площадки одного цвета</li>
+      <li>Сплошной контур — SMD-компонент: он стоит на одной стороне платы, под его корпусом дорожки проводить нельзя</li>
+      <li>Пунктирный контур — THT-компонент: выводы сквозные и доступны с обеих сторон, под корпусом дорожки проходят</li>
+    </ul>
+    <div class="bar"><i id="barfill"></i></div>
+    <div class="stats">
+      <div><span>Выполнено</span><b id="prog">0%</b></div>
+      <div><span>Время</span><b id="time">0:00</b></div>
+      <div><span>Ваша длина</span><b id="len">0</b></div>
+      <div><span>Эталон</span><b id="auto">0</b></div>
+      <div><span>Изгибы (вы / эталон)</span><b id="bnd">0</b></div>
+      <div><span>Переходы (вы / эталон)</span><b id="via">0</b></div>
+      <div class="wide"><span>Длинная к медианной (вы / эталон)</span><b id="even">0</b></div>
+      <div class="wide"><span>Лучший результат на этой плате</span><b id="best">—</b></div>
+    </div>
+    <button id="bKeys" class="alt keys" aria-expanded="false">Горячие клавиши</button>
+  </aside>
+  <aside class="ctrl">
+    <label>Уровень
+      <select id="lvl"><option value="1">1 — простая плата</option><option value="2">2 — средняя</option><option value="3">3 — плотная</option></select>
+    </label>
+    <label>ID платы <input id="seed" type="number"></label>
+    <div class="row">
+      <button id="bNew">Новая плата</button>
+      <button id="bSeed" class="alt">Загрузить ID</button>
+      <button id="bLayer">Слой: верхний (Пробел)</button>
+      <button id="bMode" class="alt">Излом: диагональ, затем прямая (F)</button>
+      <div class="icons">
+        <button id="bUndo" class="alt" title="Отменить участок (Ctrl+Z)" aria-label="Отменить участок">↶</button>
+        <button id="bRedo" class="alt" title="Вернуть участок (Ctrl+Y)" aria-label="Вернуть участок">↷</button>
+        <button id="bReset" class="alt" title="Начать заново" aria-label="Начать заново">↻</button>
+      </div>
+      <button id="bHint" class="alt">Подсказка (−3 балла)</button>
+      <button id="bGhost" class="alt">Показать эталон</button>
+    </div>
+  </aside>
+</main>
+<div id="keys" hidden>
+  <p><kbd>ЛКМ</kbd> начать, зафиксировать участок, завершить</p>
+  <p><kbd>ПКМ</kbd> отменить участок или удалить дорожку под курсором</p>
+  <p><kbd>Пробел</kbd> сменить слой, при прокладке поставить переход</p>
+  <p><kbd>F</kbd> порядок излома</p>
+  <p><kbd>Esc</kbd> пауза текущей дорожки</p>
+  <p><kbd>Delete</kbd> удалить текущую дорожку</p>
+  <p><kbd>Ctrl+Z</kbd> отменить участок</p>
+  <p><kbd>Ctrl+Y</kbd> вернуть участок</p>
+  <p><kbd>H</kbd> подсказка</p>
+</div>
+<footer>Разработал Задериев А.Р.</footer>
+<script src="js/router.js"></script>
+<script src="js/generator.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
