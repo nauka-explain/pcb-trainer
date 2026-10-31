@@ -2,9 +2,9 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Тренажер трассировки печатных плат</title>
-<script>try{document.documentElement.dataset.theme=localStorage.getItem('pcb-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark')}catch(e){}</script>
+<script>var t;try{t=localStorage.getItem('pcb-theme')}catch(e){}if(!t)t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.dataset.theme=t</script>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -17,13 +17,18 @@
 <main>
   <section class="board">
     <canvas id="cv"></canvas>
-    <div class="under"><p id="msg" class="msg"></p><span id="badge" class="badge">Верхний слой</span></div>
+    <div class="under"><p id="msg" class="msg"></p>
+      <div class="side"><span id="badge" class="badge">Верхний слой</span>
+        <label class="zoom">Масштаб<input id="zoom" type="range" min="1" max="4" step="0.05" value="1" aria-label="Масштаб платы"></label>
+      </div></div>
   </section>
   <aside class="info">
     <ul class="hint">
       <li>Соедините дорожками парные площадки одного цвета</li>
       <li>Сплошной контур — SMD-компонент: он стоит на одной стороне платы, под его корпусом дорожки проводить нельзя</li>
       <li>Пунктирный контур — THT-компонент: выводы сквозные и доступны с обеих сторон, под корпусом дорожки проходят</li>
+      <li class="touch-only">Нажмите на площадку и ведите палец, отпустите, чтобы зафиксировать участок</li>
+      <li class="touch-only">Двумя пальцами сдвигайте и масштабируйте плату</li>
     </ul>
     <div class="bar"><i id="barfill"></i></div>
     <div class="stats">
@@ -53,6 +58,8 @@
         <button id="bRedo" class="alt" title="Вернуть участок (Ctrl+Y)" aria-label="Вернуть участок">↷</button>
         <button id="bReset" class="alt" title="Начать заново" aria-label="Начать заново">↻</button>
       </div>
+      <button id="bPause" class="alt">Пауза дорожки (Esc)</button>
+      <button id="bDel" class="alt">Удалить дорожку (Delete)</button>
       <button id="bHint" class="alt">Подсказка (−3 балла)</button>
       <button id="bGhost" class="alt">Показать эталон</button>
     </div>
@@ -69,6 +76,15 @@
   <p><kbd>Ctrl+Y</kbd> вернуть участок</p>
   <p><kbd>H</kbd> подсказка</p>
 </div>
+<nav class="tools" aria-label="Быстрые действия">
+  <button data-act="layer" id="tbLayer">Верх</button>
+  <button data-act="mode" class="alt">Излом</button>
+  <button data-act="undo" class="alt" aria-label="Отменить участок">↶</button>
+  <button data-act="redo" class="alt" aria-label="Вернуть участок">↷</button>
+  <button data-act="pause" class="alt">Пауза</button>
+  <button data-act="del" class="alt">Удалить</button>
+  <button data-act="hint" class="alt">Подсказка</button>
+</nav>
 <footer>Разработал Задериев А.Р.</footer>
 <script src="js/router.js"></script>
 <script src="js/generator.js"></script>
