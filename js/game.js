@@ -1,5 +1,11 @@
 const C=34,cv=document.getElementById('cv'),cx=cv.getContext('2d'),$=id=>document.getElementById(id),root=document.documentElement;
 cv.width=W*C;cv.height=H*C;
+// Вид: масштаб и сдвиг платы (щипок двумя пальцами, колесо мыши, кнопки)
+const view={k:1,tx:0,ty:0};
+function clampView(){view.k=Math.min(4,Math.max(1,view.k));view.tx=Math.min(0,Math.max(cv.width*(1-view.k),view.tx));view.ty=Math.min(0,Math.max(cv.height*(1-view.k),view.ty))}
+const toCv=(e,dy=0)=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY+dy-r.top)*cv.height/r.height]};
+function zoomAt(px,py,f){const k0=view.k,wx=(px-view.tx)/k0,wy=(py-view.ty)/k0;view.k=k0*f;clampView();view.tx=px-wx*view.k;view.ty=py-wy*view.k;clampView()}
+function cellOf(e,dy=0){const[px,py]=toCv(e,dy);return[Math.floor((px-view.tx)/view.k/C),Math.floor((py-view.ty)/view.k/C)]}
 let B,occ,paths,tg,tgn,marks,redoS,last=null,act=null,mode=0,layer=0,hov=null,ghost=false,hintN=null,hintT,flash='',flashT,hints=0,t0=null,tEnd=null,best=null,theme='dark';
 // контрастная палитра цепей
 const PAL=['#ffd23f','#35c9ff','#ff5fa2','#ff8a3d','#b890ff','#f4f4f4','#8cff5a','#ff4d4d','#2de2c0','#ffa8e0'].map(h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)));
@@ -64,6 +70,7 @@ function pad(c,smd,fill){
 function ring(c,r,fill,hole){const[x,y]=pt(c);cx.fillStyle=fill;cx.beginPath();cx.arc(x,y,r,0,7);cx.fill();cx.strokeStyle='rgba(0,0,0,.6)';cx.lineWidth=1.5;cx.stroke();cx.fillStyle='#06120e';cx.beginPath();cx.arc(x,y,hole,0,7);cx.fill()}
 
 function draw(){
+  cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#07130f';cx.fillRect(0,0,cv.width,cv.height);cx.setTransform(view.k,0,0,view.k,view.tx,view.ty);
   const t=TH[theme],g=cx.createRadialGradient(cv.width/2,cv.height/2,40,cv.width/2,cv.height/2,cv.width*.65);
   g.addColorStop(0,t.b0);g.addColorStop(1,t.b1);cx.fillStyle=g;cx.fillRect(0,0,cv.width,cv.height);
   if(layer){cx.fillStyle=t.tint;cx.fillRect(0,0,cv.width,cv.height)}
@@ -99,7 +106,8 @@ function draw(){
   cx.globalAlpha=1;
   // концы незаконченных дорожек (пауза)
   paths.forEach((p,i)=>{if(p.length>1&&!done(i)&&(p[p.length-1]/N|0)===layer){const[x,y]=pt(p[p.length-1]%N);cx.strokeStyle='#fff';cx.lineWidth=2;cx.setLineDash([3,3]);cx.beginPath();cx.arc(x,y,15,0,7);cx.stroke();cx.setLineDash([])}});
-  $('badge').textContent=layer?'Нижний слой':'Верхний слой';$('badge').className='badge'+(layer?' bot':'');
+  if(tg2&&tg2.mode==='route'&&tg2.moved&&hov){const[x,y]=[hov[0]*C+C/2,hov[1]*C+C/2];cx.strokeStyle='#fff';cx.lineWidth=2;cx.beginPath();cx.arc(x,y,C*.45,0,7);cx.stroke()}   // метка точки под пальцем
+  $('zoom').value=view.k;$('tbLayer').textContent=layer?'Низ':'Верх';$('badge').textContent=layer?'Нижний слой':'Верхний слой';$('badge').className='badge'+(layer?' bot':'');
   $('bLayer').textContent='Слой: '+(layer?'нижний':'верхний')+' (Пробел)';
   stats();
 }
@@ -126,10 +134,6 @@ function stats(){
   $('msg').textContent=flash||m;
 }
 
-function cellOf(e){
-  const r=cv.getBoundingClientRect();
-  return[Math.floor((e.clientX-r.left)*cv.width/r.width/C),Math.floor((e.clientY-r.top)*cv.height/r.height/C)];
-}
 // что можно начать или продолжить в этой клетке
 function findStart(i){
   for(let n=0;n<B.nets.length;n++){
@@ -180,26 +184,65 @@ function flip(){
 }
 // F: порядок излома
 function toggleMode(){mode^=1;$('bMode').textContent=mode?'Излом: прямая, затем диагональ (F)':'Излом: диагональ, затем прямая (F)';draw()}
+function pause(){act=null;$('keys').hidden=true;draw()}
+function del(){if(act!==null){clearNet(act);act=null;draw()}}
 function hint(){
   const i=B.nets.findIndex((_,k)=>!done(k)&&!paths[k].length);if(i<0)return;
   hintN=i;hints++;draw();clearTimeout(hintT);hintT=setTimeout(()=>{hintN=null;draw()},4000);
 }
 
-cv.addEventListener('pointermove',e=>{hov=cellOf(e);draw()});
-cv.addEventListener('pointerleave',()=>{hov=null;draw()});
-cv.addEventListener('contextmenu',e=>{
-  e.preventDefault();
-  if(act!==null)return undo();
-  const[x,y]=cellOf(e);if(x<0||y<0||x>=W||y>=H)return;
-  const n=Math.max(occ[layer][y*W+x],occ[1-layer][y*W+x]);if(n>=0){clearNet(n);draw()}
-});
-cv.addEventListener('pointerdown',e=>{
+// Мышь: клики. Касание: нажать на площадку, вести палец, отпустить — участок фиксируется; двумя пальцами — сдвиг и масштаб
+const ptrs=new Map(),TOUCH_DY=-36;let pinch=null,tg2=null;
+function mouseDown(e){
   if(e.button!==0)return;
   hov=cellOf(e);const[x,y]=hov;if(x<0||y<0||x>=W||y>=H)return;
   const f=findStart(y*W+x);
   if(act!==null&&(!f||f.n===act))return commit();
   if(f)begin(f);
   draw();
+}
+function touchDown(e,px,py){
+  hov=cellOf(e);const[x,y]=hov;
+  const f=(x>=0&&y>=0&&x<W&&y<H)?findStart(y*W+x):null;
+  if(f&&f.n!==act){begin(f);tg2={mode:'route',moved:false,start:true,px,py}}
+  else if(act!==null)tg2={mode:'route',moved:false,start:false,px,py};
+  else tg2={mode:'pan',x:px,y:py,tx:view.tx,ty:view.ty};
+  draw();
+}
+cv.addEventListener('pointerdown',e=>{
+  if(cv.setPointerCapture&&e.pointerId!==undefined)try{cv.setPointerCapture(e.pointerId)}catch(_){}
+  const[px,py]=toCv(e);ptrs.set(e.pointerId,{x:px,y:py});
+  if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,mx:(a.x+b.x)/2,my:(a.y+b.y)/2,k:view.k,tx:view.tx,ty:view.ty};tg2=null;return}
+  if(ptrs.size>2)return;
+  if(e.button===1){tg2={mode:'pan',x:px,y:py,tx:view.tx,ty:view.ty};return}
+  if(e.pointerType==='touch')touchDown(e,px,py);else mouseDown(e);
+});
+cv.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId)){hov=cellOf(e);draw();return}
+  const[px,py]=toCv(e);ptrs.set(e.pointerId,{x:px,y:py});
+  if(pinch&&ptrs.size===2){
+    const[a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y)||1,mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+    const wx=(pinch.mx-pinch.tx)/pinch.k,wy=(pinch.my-pinch.ty)/pinch.k;
+    view.k=pinch.k*d/pinch.d;clampView();view.tx=mx-wx*view.k;view.ty=my-wy*view.k;clampView();draw();return;
+  }
+  if(!tg2){hov=cellOf(e);draw();return}
+  if(tg2.mode==='pan'){view.tx=tg2.tx+px-tg2.x;view.ty=tg2.ty+py-tg2.y;clampView();draw();return}
+  if(Math.hypot(px-tg2.px,py-tg2.py)>8)tg2.moved=true;
+  hov=cellOf(e,tg2.moved?TOUCH_DY:0);draw();   // при движении метка чуть выше пальца, чтобы палец не закрывал точку
+});
+['pointerup','pointercancel'].forEach(t=>cv.addEventListener(t,e=>{
+  const was=tg2;ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
+  if(t==='pointerup'&&was&&was.mode==='route'&&act!==null&&(was.moved||!was.start))commit();
+  tg2=null;if(e.pointerType==='touch')hov=null;
+  draw();
+}));
+cv.addEventListener('pointerleave',()=>{if(!tg2){hov=null;draw()}});
+cv.addEventListener('wheel',e=>{e.preventDefault();const[px,py]=toCv(e);zoomAt(px,py,e.deltaY<0?1.15:1/1.15);draw()},{passive:false});
+cv.addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  if(act!==null)return undo();
+  const[x,y]=cellOf(e);if(x<0||y<0||x>=W||y>=H)return;
+  const n=Math.max(occ[layer][y*W+x],occ[1-layer][y*W+x]);if(n>=0){clearNet(n);draw()}
 });
 addEventListener('keydown',e=>{
   const tag=e.target.tagName;if(tag==='INPUT'||tag==='SELECT')return;
@@ -207,8 +250,8 @@ addEventListener('keydown',e=>{
   if(e.code==='Space'){e.preventDefault();flip()}
   else if(e.code==='KeyF')toggleMode();
   else if(e.code==='KeyH')hint();
-  else if(e.key==='Escape'){act=null;$('keys').hidden=true;draw()}
-  else if((e.key==='Delete'||e.key==='Backspace')&&act!==null){clearNet(act);act=null;draw()}
+  else if(e.key==='Escape')pause();
+  else if(e.key==='Delete'||e.key==='Backspace')del();
 });
 addEventListener('click',e=>{
   if(!e.target.closest('#bKeys,#keys'))$('keys').hidden=true;
@@ -232,6 +275,10 @@ $('bRedo').onclick=redo;
 addEventListener('resize',()=>{$('keys').hidden=true});
 $('bLayer').onclick=flip;
 $('bHint').onclick=hint;
+$('bPause').onclick=pause;$('bDel').onclick=del;
+$('zoom').oninput=()=>{zoomAt(cv.width/2,cv.height/2,+$('zoom').value/view.k);draw()};   // ползунок масштаба
+const ACT={layer:flip,mode:toggleMode,undo,redo,pause,del,hint};   // нижняя панель на телефоне
+document.querySelectorAll('[data-act]').forEach(b=>{b.onclick=()=>ACT[b.dataset.act]()});
 $('lvl').onchange=()=>newGame();
 $('bGhost').onclick=()=>{ghost=!ghost;$('bGhost').textContent=ghost?'Скрыть эталон':'Показать эталон';draw()};
 setInterval(()=>{if(t0&&!tEnd)$('time').textContent=fmt(Date.now()-t0)},500);
