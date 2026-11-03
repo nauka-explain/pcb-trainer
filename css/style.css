@@ -66,3 +66,4 @@ footer{text-align:center;color:var(--dim);margin-top:70px;padding:0 0 48px;font-
 @media (pointer:coarse) and (max-height:560px) and (orientation:landscape){
   canvas{width:min(100%,calc((100vh - 120px)*1.5));margin:0 auto}
 }
+body.anim .ctrl button:not(#bAnim),body.anim .ctrl select,body.anim .ctrl input,body.anim .tools button{pointer-events:none;opacity:.45}
