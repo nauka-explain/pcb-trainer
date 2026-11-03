@@ -6,7 +6,7 @@ function clampView(){view.k=Math.min(4,Math.max(1,view.k));view.tx=Math.min(0,Ma
 const toCv=(e,dy=0)=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY+dy-r.top)*cv.height/r.height]};
 function zoomAt(px,py,f){const k0=view.k,wx=(px-view.tx)/k0,wy=(py-view.ty)/k0;view.k=k0*f;clampView();view.tx=px-wx*view.k;view.ty=py-wy*view.k;clampView()}
 function cellOf(e,dy=0){const[px,py]=toCv(e,dy);return[Math.floor((px-view.tx)/view.k/C),Math.floor((py-view.ty)/view.k/C)]}
-let B,occ,paths,tg,tgn,marks,redoS,last=null,act=null,mode=0,layer=0,hov=null,ghost=false,hintN=null,hintT,flash='',flashT,hints=0,t0=null,tEnd=null,best=null,theme='dark';
+let anim=null,B,occ,paths,tg,tgn,marks,redoS,last=null,act=null,mode=0,layer=0,hov=null,ghost=false,hintN=null,hintT,flash='',flashT,hints=0,t0=null,tEnd=null,best=null,theme='dark';
 // контрастная палитра цепей
 const PAL=['#ffd23f','#35c9ff','#ff5fa2','#ff8a3d','#b890ff','#f4f4f4','#8cff5a','#ff4d4d','#2de2c0','#ffa8e0'].map(h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)));
 const col=(n,a=1)=>`rgba(${PAL[n%PAL.length]},${a})`;
@@ -14,11 +14,12 @@ const TH={dark:{b0:'#17614b',b1:'#0a2e24',dot:'rgba(255,255,255,.13)',tint:'rgba
 const pt=c=>{const[x,y]=cxy(c);return[x*C+C/2,y*C+C/2]};
 const done=n=>paths[n].length>0&&tgn[n].includes(paths[n][paths[n].length-1]);
 const fmt=ms=>{const s=ms/1000|0;return(s/60|0)+':'+String(s%60).padStart(2,'0')};
-const key=()=>'pcb:'+B.seed+':'+B.lvl;
+const key=()=>'pcb3:'+B.seed+':'+B.lvl;   // новый ключ: поле стало больше, старые рекорды не подходят
 function note(s){flash=s;clearTimeout(flashT);flashT=setTimeout(()=>{flash='';stats()},2500);stats()}
 
 function setTheme(t){theme=t;root.dataset.theme=t;try{localStorage.setItem('pcb-theme',t)}catch(e){}$('bTheme').setAttribute('aria-checked',t==='dark');$('bTheme').title=t==='dark'?'Тёмная тема, нажмите для светлой':'Светлая тема, нажмите для тёмной';if(B)draw()}
 function newGame(seed){
+  if(anim)animStop();
   seed=seed||(Math.random()*1e6|0);
   while(!(B=generate(seed,+$('lvl').value)))seed++;   // редкие нерешаемые ID пропускаем
   $('seed').value=seed;
@@ -71,6 +72,7 @@ function ring(c,r,fill,hole){const[x,y]=pt(c);cx.fillStyle=fill;cx.beginPath();c
 
 function draw(){
   cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#07130f';cx.fillRect(0,0,cv.width,cv.height);cx.setTransform(view.k,0,0,view.k,view.tx,view.ty);
+  const shown=anim?anim.paths:paths,dn=i=>anim?anim.complete[i]:done(i);
   const t=TH[theme],g=cx.createRadialGradient(cv.width/2,cv.height/2,40,cv.width/2,cv.height/2,cv.width*.65);
   g.addColorStop(0,t.b0);g.addColorStop(1,t.b1);cx.fillStyle=g;cx.fillRect(0,0,cv.width,cv.height);
   if(layer){cx.fillStyle=t.tint;cx.fillRect(0,0,cv.width,cv.height)}
@@ -79,7 +81,7 @@ function draw(){
   if(hov&&hov[0]>=0&&hov[1]>=0&&hov[0]<W&&hov[1]<H){cx.fillStyle='rgba(255,255,255,.1)';cx.fillRect(hov[0]*C+2,hov[1]*C+2,C-4,C-4)}
   [0,W-1].forEach(x=>[0,H-1].forEach(y=>ring(y*W+x,11,'#d9a05b',6)));
   cx.lineCap=cx.lineJoin='round';
-  paths.forEach((p,i)=>track(p,i,1-layer,.3,false));
+  shown.forEach((p,i)=>track(p,i,1-layer,.3,false));
   B.comps.forEach(k=>{
     cx.globalAlpha=k.smd&&k.side!==layer?.3:1;
     k.rows.forEach((row,j)=>[...row].forEach((ch,i)=>{
@@ -92,10 +94,10 @@ function draw(){
     cx.fillText(k.n+(k.tag?' '+k.tag:'')+(k.smd&&k.side?' (низ)':''),k.x*C+3,k.y===0?(k.y+k.h)*C+12:k.y*C-3);
   });
   cx.globalAlpha=1;
-  if(ghost)B.auto.paths.forEach(p=>line(p.map(n=>n%N),2,'rgba(255,255,255,.6)',[5,5]));
-  B.nets.forEach((n,i)=>{if(!done(i))line([n.a.c,n.b.c],1.5,col(i,.5),[4,5])});
-  paths.forEach((p,i)=>track(p,i,layer,1,true));
-  paths.forEach(p=>vias(p,B.base).forEach(c=>ring(c,9,'#e0b060',3.5)));
+  if(ghost&&!anim)B.auto.paths.forEach(p=>line(p.map(n=>n%N),2,'rgba(255,255,255,.6)',[5,5]));
+  B.nets.forEach((n,i)=>{if(!dn(i))line([n.a.c,n.b.c],1.5,col(i,.5),[4,5])});
+  shown.forEach((p,i)=>track(p,i,layer,1,true));
+  shown.forEach(p=>vias(p,B.base).forEach(c=>ring(c,9,'#e0b060',3.5)));
   const pv=preview();
   if(pv){
     const p=paths[act];line([p[p.length-1]%N,...pv.cells],10,col(act,.55));
@@ -105,7 +107,15 @@ function draw(){
   B.allPads.forEach(p=>{cx.globalAlpha=p.smd&&p.side!==layer?.3:1;pad(p.c,p.smd,p.net>=0?col(p.net):'#8f9a92')});
   cx.globalAlpha=1;
   // концы незаконченных дорожек (пауза)
-  paths.forEach((p,i)=>{if(p.length>1&&!done(i)&&(p[p.length-1]/N|0)===layer){const[x,y]=pt(p[p.length-1]%N);cx.strokeStyle='#fff';cx.lineWidth=2;cx.setLineDash([3,3]);cx.beginPath();cx.arc(x,y,15,0,7);cx.stroke();cx.setLineDash([])}});
+  (anim?[]:paths).forEach((p,i)=>{if(p.length>1&&!done(i)&&(p[p.length-1]/N|0)===layer){const[x,y]=pt(p[p.length-1]%N);cx.strokeStyle='#fff';cx.lineWidth=2;cx.setLineDash([3,3]);cx.beginPath();cx.arc(x,y,15,0,7);cx.stroke();cx.setLineDash([])}});
+  if(anim){   // «перо» анимации: хвост до головки, свечение, вспышки при подключении площадки
+    const hd=anim.head;
+    if(hd){const pp=anim.paths[hd.n],lp=pp.length?pt(pp[pp.length-1]%N):[hd.x,hd.y];
+      cx.beginPath();cx.moveTo(lp[0],lp[1]);cx.lineTo(hd.x,hd.y);cx.lineWidth=9;cx.strokeStyle=col(hd.n,1);cx.stroke();
+      const gr=cx.createRadialGradient(hd.x,hd.y,2,hd.x,hd.y,C*.9);gr.addColorStop(0,col(hd.n,.9));gr.addColorStop(1,col(hd.n,0));
+      cx.fillStyle=gr;cx.beginPath();cx.arc(hd.x,hd.y,C*.9,0,7);cx.fill();cx.fillStyle='#fff';cx.beginPath();cx.arc(hd.x,hd.y,4,0,7);cx.fill()}
+    anim.flash.forEach(f=>{const[x,y]=pt(B.nets[f.n].b.c),q=f.age/600;cx.strokeStyle=col(f.n,1-q);cx.lineWidth=3;cx.beginPath();cx.arc(x,y,12+q*26,0,7);cx.stroke()});
+  }
   if(tg2&&tg2.mode==='route'&&tg2.moved&&hov){const[x,y]=[hov[0]*C+C/2,hov[1]*C+C/2];cx.strokeStyle='#fff';cx.lineWidth=2;cx.beginPath();cx.arc(x,y,C*.45,0,7);cx.stroke()}   // метка точки под пальцем
   $('zoom').value=view.k;$('tbLayer').textContent=layer?'Низ':'Верх';$('badge').textContent=layer?'Нижний слой':'Верхний слой';$('badge').className='badge'+(layer?' bot':'');
   $('bLayer').textContent='Слой: '+(layer?'нижний':'верхний')+' (Пробел)';
@@ -131,6 +141,7 @@ function stats(){
     $('best').textContent=best.s+'/100';
     m=`Готово! Оценка ${s}/100 ${s>=90?'★★★':s>=75?'★★☆':'★☆☆'}\n`+(L<B.auto.len-.01?'Вы обошли автотрассировщика по длине':s>=90?'Результат близок к автотрассировщику':'Сократите длину, изгибы, переходы и самую длинную дорожку')+`\nВремя ${fmt(tEnd-t0)}`;
   }
+  if(anim)m=anim.text;
   $('msg').textContent=flash||m;
 }
 
@@ -184,6 +195,39 @@ function flip(){
 }
 // F: порядок излома
 function toggleMode(){mode^=1;$('bMode').textContent=mode?'Излом: прямая, затем диагональ (F)':'Излом: диагональ, затем прямая (F)';draw()}
+// Анимация: цепи эталона прокладываются по одной в порядке автотрассировщика, слой переключается вместе с «пером»
+function animStart(){
+  pause();hintN=null;
+  const segs=[];let t=0;
+  B.auto.ord.forEach(n=>{const p=B.auto.paths[n],dur=Math.max(450,p.length*40);segs.push({n,p,t0:t,dur});t+=dur+180});
+  const sc=Math.min(1,12000/t);segs.forEach(g=>{g.t0*=sc;g.dur*=sc});t*=sc;   // вся анимация не длиннее ~12 с
+  anim={start:performance.now(),segs,total:t,saveLayer:layer,paths:B.nets.map(()=>[]),complete:B.nets.map(()=>false),head:null,flash:[],text:'',finished:false};
+  document.body.classList.add('anim');$('bAnim').textContent='Закрыть анимацию (A)';
+  animTick(anim.start);
+}
+function animStop(){
+  if(!anim)return;layer=anim.saveLayer;anim=null;
+  document.body.classList.remove('anim');$('bAnim').textContent='Анимация эталона (A)';draw();
+}
+function animUpdate(now){
+  const a=anim,el=now-a.start;let cur=null,n=0;a.flash=[];
+  a.segs.forEach(s=>{
+    const f=Math.min(1,Math.max(0,(el-s.t0)/s.dur)),i=f*(s.p.length-1),m=Math.floor(i);
+    a.paths[s.n]=f<=0?[]:s.p.slice(0,m+1);a.complete[s.n]=f>=1;
+    if(f>=1){n++;const age=el-s.t0-s.dur;if(age<600)a.flash.push({n:s.n,age})}
+    else if(f>0)cur={s,m,fr:i-m};
+  });
+  a.head=null;
+  if(cur){const{s,m,fr}=cur,p0=pt(s.p[m]%N),p1=pt(s.p[Math.min(m+1,s.p.length-1)]%N);layer=s.p[m]/N|0;a.head={n:s.n,x:p0[0]+(p1[0]-p0[0])*fr,y:p0[1]+(p1[1]-p0[1])*fr}}
+  const tot=B.nets.length;
+  a.text=`Эталонная трассировка: цепь ${Math.min(tot,n+(cur?1:0))} из ${tot}`;
+  if(el>=a.total){a.finished=true;layer=0;a.text=`Эталон проложен\nДлина ${B.auto.len.toFixed(1)}, изгибы ${B.auto.bends}, переходы ${B.auto.vias}`}
+}
+function animTick(now){
+  if(!anim)return;animUpdate(now);draw();
+  if(!anim.finished)requestAnimationFrame(animTick);
+}
+const animToggle=()=>anim?animStop():animStart();
 function pause(){act=null;$('keys').hidden=true;draw()}
 function del(){if(act!==null){clearNet(act);act=null;draw()}}
 function hint(){
@@ -210,6 +254,7 @@ function touchDown(e,px,py){
   draw();
 }
 cv.addEventListener('pointerdown',e=>{
+  if(anim)return;
   if(cv.setPointerCapture&&e.pointerId!==undefined)try{cv.setPointerCapture(e.pointerId)}catch(_){}
   const[px,py]=toCv(e);ptrs.set(e.pointerId,{x:px,y:py});
   if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,mx:(a.x+b.x)/2,my:(a.y+b.y)/2,k:view.k,tx:view.tx,ty:view.ty};tg2=null;return}
@@ -237,6 +282,7 @@ cv.addEventListener('pointermove',e=>{
   draw();
 }));
 cv.addEventListener('pointerleave',()=>{if(!tg2){hov=null;draw()}});
+cv.addEventListener('lostpointercapture',e=>{ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null});   // страховка от «потерянных» касаний
 cv.addEventListener('wheel',e=>{e.preventDefault();const[px,py]=toCv(e);zoomAt(px,py,e.deltaY<0?1.15:1/1.15);draw()},{passive:false});
 cv.addEventListener('contextmenu',e=>{
   e.preventDefault();
@@ -246,10 +292,12 @@ cv.addEventListener('contextmenu',e=>{
 });
 addEventListener('keydown',e=>{
   const tag=e.target.tagName;if(tag==='INPUT'||tag==='SELECT')return;
+  if(anim){if(e.code==='KeyA'||e.key==='Escape')animStop();return}
   if(e.ctrlKey||e.metaKey){if(e.code==='KeyZ'){e.preventDefault();e.shiftKey?redo():undo()}else if(e.code==='KeyY'){e.preventDefault();redo()}return}
   if(e.code==='Space'){e.preventDefault();flip()}
   else if(e.code==='KeyF')toggleMode();
   else if(e.code==='KeyH')hint();
+  else if(e.code==='KeyA')animStart();
   else if(e.key==='Escape')pause();
   else if(e.key==='Delete'||e.key==='Backspace')del();
 });
@@ -275,6 +323,7 @@ $('bRedo').onclick=redo;
 addEventListener('resize',()=>{$('keys').hidden=true});
 $('bLayer').onclick=flip;
 $('bHint').onclick=hint;
+$('bAnim').onclick=animToggle;
 $('bPause').onclick=pause;$('bDel').onclick=del;
 $('zoom').oninput=()=>{zoomAt(cv.width/2,cv.height/2,+$('zoom').value/view.k);draw()};   // ползунок масштаба
 const ACT={layer:flip,mode:toggleMode,undo,redo,pause,del,hint};   // нижняя панель на телефоне

@@ -1,6 +1,6 @@
 // Сетка, два слоя и автотрассировщик (A* по состояниям «слой + клетка + направление»)
 // Узел пути = слой*N + клетка; слой 0 — верх, слой 1 — низ
-const W=24,H=16,N=W*H,VIA=4,DIRS=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+const W=36,H=24,N=W*H,VIA=4,DIRS=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
 const dirIdx=(dx,dy)=>DIRS.findIndex(d=>d[0]===dx&&d[1]===dy);
 const cxy=c=>[c%W,(c/W|0)];
 function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -23,22 +23,23 @@ function vias(p,base){const r=[];for(let k=1;k<p.length;k++){const a=p[k-1]%N;if
 
 function route(o,n,srcs,tg,tgn){
   const S=2*N*9,dist=new Float64Array(S).fill(1e9),prev=new Int32Array(S).fill(-1),h=[];
-  const push=(c,i)=>{h.push([c,i]);let k=h.length-1;while(k>0){const p=(k-1)>>1;if(h[p][0]<=h[k][0])break;[h[p],h[k]]=[h[k],h[p]];k=p}};
+  const[tx,ty]=cxy(tg),hh=(x,y)=>{const dx=Math.abs(tx-x),dy=Math.abs(ty-y);return Math.max(dx,dy)+(Math.SQRT2-1)*Math.min(dx,dy)};   // A*: оценка оставшегося пути
+  const push=(f,g,i)=>{h.push([f,g,i]);let k=h.length-1;while(k>0){const p=(k-1)>>1;if(h[p][0]<=h[k][0])break;[h[p],h[k]]=[h[k],h[p]];k=p}};
   const pop=()=>{const t=h[0],l=h.pop();if(h.length){h[0]=l;let k=0;for(;;){const a=2*k+1,b=a+1;let m=k;if(a<h.length&&h[a][0]<h[m][0])m=a;if(b<h.length&&h[b][0]<h[m][0])m=b;if(m===k)break;[h[m],h[k]]=[h[k],h[m]];k=m}}return t};
-  srcs.forEach(s=>{dist[s*9+8]=0;push(0,s*9+8)});
+  srcs.forEach(s=>{const[sx,sy]=cxy(s%N);dist[s*9+8]=0;push(hh(sx,sy),0,s*9+8)});
   while(h.length){
-    const[c,i]=pop();if(c>dist[i])continue;
+    const[,c,i]=pop();if(c>dist[i])continue;
     const nd=i/9|0,pd=i%9,cell=nd%N,l=nd/N|0,[x,y]=cxy(cell);
     if(tgn.includes(nd)){const p=[];for(let k=i;k>=0;k=prev[k])p.push(k/9|0);return p.reverse()}
     for(let d=0;d<8;d++){
       const nx=x+DIRS[d][0],ny=y+DIRS[d][1];
       if(!ok(o[l],n,tg,x,y,nx,ny,pd))continue;
       const nc=c+(d%2?Math.SQRT2:1)+(pd<8&&pd!==d?.6:0),ni=(l*N+ny*W+nx)*9+d;
-      if(nc<dist[ni]){dist[ni]=nc;prev[ni]=i;push(nc,ni)}
+      if(nc<dist[ni]){dist[ni]=nc;prev[ni]=i;push(nc+hh(nx,ny),nc,ni)}
     }
     if(o[0][cell]===-1&&o[1][cell]===-1){
       const ni=((1-l)*N+cell)*9+8,nc=c+VIA;
-      if(nc<dist[ni]){dist[ni]=nc;prev[ni]=i;push(nc,ni)}
+      if(nc<dist[ni]){dist[ni]=nc;prev[ni]=i;push(nc+hh(x,y),nc,ni)}
     }
   }
   return null;

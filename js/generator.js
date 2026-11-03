@@ -17,7 +17,7 @@ const EDGE=[
   {p:'J',smd:0,edge:1,tag:'CON',mk:()=>['...','ppp']},
 ];
 const rot=rows=>Array.from(rows[0],(_,j)=>rows.map((_,i)=>rows[rows.length-1-i][j]).join(''));
-const LEVELS={1:{parts:3,nets:4,x:1},2:{parts:5,nets:6,x:3},3:{parts:7,nets:8,x:4}};
+const LEVELS={1:{parts:4,nets:5,x:2},2:{parts:7,nets:8,x:3},3:{parts:10,nets:12,x:4},4:{parts:14,nets:18,x:5}};
 const shuf=(a,r)=>{for(let i=a.length-1;i>0;i--){const j=r()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
 
 function tryGen(seed,lvl){
@@ -63,7 +63,7 @@ function tryGen(seed,lvl){
   return{seed,lvl,base,nets,comps,allPads:pads};
 }
 function generate(seed,lvl){
-  for(let k=0;k<300;k++){
+  for(let k=0;k<500;k++){
     const b=tryGen(seed+k*7919,lvl);if(!b)continue;
     if(!autoroute(b,1))continue;
     b.auto=autoroute(b,6);
